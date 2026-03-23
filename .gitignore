@@ -1,0 +1,7 @@
+# files inside the photos folder
+photos/*
+!photos/.gitkeep
+!photos/manifest.template.json
+
+# local runtime tags file
+tags.local.json
