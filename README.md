@@ -35,6 +35,7 @@ USB:/
 
 Both scripts:
 - start a local server in this project folder
+- refresh `photos/manifest.local.json` automatically on startup
 - open [gallery.html](gallery.html)
 - keep the server running until you close the terminal window or press `Ctrl+C`
 
@@ -45,7 +46,9 @@ On strict `file:///` environments, some browsers block folder listing — manual
 
 ### Manifest fallback (recommended)
 
-If your server/browser does not expose a directory listing for `photos/`, create `photos/manifest.json`:
+This project keeps a tracked template at `photos/manifest.template.json` and uses an ignored local file at `photos/manifest.local.json` for real updates.
+
+If your server/browser does not expose a directory listing for `photos/`, create `photos/manifest.local.json`:
 
 ```json
 {
@@ -56,14 +59,15 @@ If your server/browser does not expose a directory listing for `photos/`, create
 }
 ```
 
-The gallery checks both `photos/` and `photos/manifest.json` during auto-scan.
+The gallery checks `photos/`, then `photos/manifest.local.json`, then `photos/manifest.template.json` during auto-scan.
 
 To rebuild the manifest after adding/removing files:
 
 1. Open the gallery via `http://...` (local server mode).
 2. Click **🗂 Refresh Manifest** in the control bar.
-3. A new `manifest.json` is downloaded.
-4. Replace `photos/manifest.json` with the downloaded file.
+3. The local server updates `photos/manifest.local.json` directly.
+
+If the gallery is running on a plain static server without the included Python launcher, the button falls back to downloading `manifest.local.json` and you must place it inside `photos/` manually.
 
 ---
 
@@ -111,8 +115,8 @@ You can toggle it on/off from the bottom control bar badge (⬚ Pixel Shift: ON/
 | Shuffle           | 🔀 button                        |
 | Add photos        | ＋ Photos button                 |
 | Auto add from folder | Drop files into `photos/` (polled every ~10s) |
-| Manifest fallback | List filenames in `photos/manifest.json` |
-| Rebuild manifest  | 🗂 Refresh Manifest (downloads updated manifest) |
+| Manifest fallback | List filenames in `photos/manifest.local.json` |
+| Rebuild manifest  | 🗂 Refresh Manifest (updates `photos/manifest.local.json`) |
 | Filter by year    | Year dropdown                    |
 | Filter by theme   | Theme dropdown                   |
 | Tag current photo | Frame hover → “🏷️ edit tags”    |
@@ -129,5 +133,5 @@ Hover anywhere on screen to reveal the control bar.
 
 - If the font doesn't load (no internet on TV), the gallery still works fine — it falls back to a serif font.
 - If the browser blocks local file access, try a different browser app on the TV, or use a laptop connected to the TV via HDMI instead.
-- If auto-scan doesn't detect files on TV browser, use `photos/manifest.json` or the manual file picker.
+- If auto-scan doesn't detect files on TV browser, use `photos/manifest.local.json` or the manual file picker.
 - For the best experience, put the TV browser in **fullscreen mode** (usually F11 or the TV remote's full-screen button).

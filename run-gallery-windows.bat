@@ -12,13 +12,13 @@ start "" cmd /c "timeout /t 2 /nobreak >nul && start \"\" \"%URL%\""
 
 where py >nul 2>nul
 if %errorlevel%==0 (
-    py -m http.server %PORT%
+    py gallery_server.py --port %PORT%
     goto :eof
 )
 
 where python >nul 2>nul
 if %errorlevel%==0 (
-    python -m http.server %PORT%
+    python gallery_server.py --port %PORT%
     goto :eof
 )
 

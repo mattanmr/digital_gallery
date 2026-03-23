@@ -15,4 +15,4 @@ echo "Keep this window open while using the gallery."
 echo "Press Ctrl+C to stop the server."
 
 (sleep 1; open "$URL") &
-exec python3 -m http.server "$PORT"
+exec python3 gallery_server.py --port "$PORT"
