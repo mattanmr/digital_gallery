@@ -250,11 +250,11 @@ select.c-sel { background:var(--ui-bg); color:var(--gold-lt); border:1px solid v
 <div id="export-modal">
   <div class="export-box">
     <h3>Save Your Tags</h3>
-    <p>Click <strong style="color:var(--gold-lt)">Download tags.json</strong> and save it to your USB stick alongside <code style="background:rgba(255,255,255,.07);border-radius:2px;padding:1px 5px;font-size:.8rem;color:var(--gold-lt)">gallery.html</code>.<br><br>
-    Next session, use <strong style="color:var(--gold-lt)">Import tags.json</strong> on the welcome screen to restore everything.</p>
+    <p>When using the included local server, click <strong style="color:var(--gold-lt)">Update tags.local.json</strong> to save your captions, years and themes directly into this project.<br><br>
+    On a plain static server, the gallery falls back to downloading <code style="background:rgba(255,255,255,.07);border-radius:2px;padding:1px 5px;font-size:.8rem;color:var(--gold-lt)">tags.local.json</code> and you can place it next to <code style="background:rgba(255,255,255,.07);border-radius:2px;padding:1px 5px;font-size:.8rem;color:var(--gold-lt)">gallery.html</code>.</p>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:3px">
       <button class="btn-cancel" onclick="closeExport()">Close</button>
-      <button class="btn-gold" onclick="downloadTags()">⬇ Download tags.json</button>
+      <button class="btn-gold" onclick="saveTagsFile()">💾 Update tags.local.json</button>
     </div>
   </div>
 </div>
@@ -269,6 +269,8 @@ const SPEED_JITTER = 0.45;
 const AUTO_PHOTO_DIR = 'photos/';
 const AUTO_MANIFEST_LOCAL = `${AUTO_PHOTO_DIR}manifest.local.json`;
 const AUTO_MANIFEST_TEMPLATE = `${AUTO_PHOTO_DIR}manifest.template.json`;
+const AUTO_TAGS_LOCAL = 'tags.local.json';
+const AUTO_TAGS_TEMPLATE = 'tags.template.json';
 const AUTO_POLL_MS = 10000;
 const IMG_EXT_RE = /\.(jpg|jpeg|png|webp|gif|bmp|avif|heic|heif)$/i;
 const IS_FILE_PROTOCOL = location.protocol === 'file:';
@@ -282,6 +284,7 @@ let psOn = true, psTimer = null;
 let tagTarget = null;
 let autoPollTimer = null;
 let autoPollNoticeShown = false;
+let galleryStarted = false;
 const seenPhotoKeys = new Set();
 
 const mosaicEl = document.getElementById('mosaic');
@@ -413,6 +416,63 @@ function addPhotoEntry({ url, cleanName, key }) {
   return true;
 }
 
+function normalizeTagRecord(raw) {
+  if (!raw || typeof raw !== 'object') return { caption:'', year:null, tags:[] };
+  return {
+    caption: typeof raw.caption === 'string' ? raw.caption : '',
+    year: raw.year === null || raw.year === undefined ? null : (parseInt(raw.year) || null),
+    tags: Array.isArray(raw.tags) ? raw.tags.map(String).map(t=>t.trim()).filter(Boolean) : []
+  };
+}
+
+function applySavedTagsToPhotos() {
+  allPhotos.forEach(p => {
+    const saved = savedTags[p.name];
+    if (!saved) return;
+    const normalized = normalizeTagRecord(saved);
+    p.caption = normalized.caption;
+    p.year = normalized.year;
+    p.tags = normalized.tags;
+  });
+  if (galleryStarted) {
+    rebuildFilters();
+    frameState.forEach((state, fi) => {
+      if (state.photoIdx >= 0) showInFrame(fi, state.photoIdx);
+    });
+  }
+}
+
+async function loadAutoTags() {
+  let loaded = false;
+  const merged = {};
+  for (const path of [AUTO_TAGS_TEMPLATE, AUTO_TAGS_LOCAL]) {
+    try {
+      const res = await fetch(path, { cache:'no-store' });
+      if (!res.ok) continue;
+      const payload = JSON.parse(await res.text());
+      if (!payload || typeof payload !== 'object' || Array.isArray(payload)) continue;
+      Object.entries(payload).forEach(([name, value]) => {
+        merged[name] = normalizeTagRecord(value);
+      });
+      loaded = true;
+    } catch {}
+  }
+  if (!loaded) return false;
+  savedTags = merged;
+  applySavedTagsToPhotos();
+  return true;
+}
+
+function buildTagsPayload() {
+  const out = {};
+  allPhotos.forEach(p => {
+    if (p.caption || p.year || p.tags.length) {
+      out[p.name] = { caption:p.caption, year:p.year, tags:p.tags };
+    }
+  });
+  return out;
+}
+
 function loadFiles(files) {
   const imgs = [...files].filter(f=>f.type.startsWith('image/')||/\.(heic|heif)$/i.test(f.name));
   if (!imgs.length) return;
@@ -498,9 +558,9 @@ async function fetchAutoFolderPhotos() {
 function refreshGalleryAfterAutoAdd(added) {
   if (!added) return;
   startBtn.style.display = 'block';
-  const started = welcomeEl.style.display === 'none';
+  const started = galleryStarted;
   if (!started) {
-    toast(`${added} new photo${added>1?'s':''} detected in photos/`);
+    startGallery();
     return;
   }
   const activeYear = yearSel.value;
@@ -555,8 +615,10 @@ document.getElementById('tags-import-input').addEventListener('change', e=>{
   const r=new FileReader();
   r.onload=ev=>{
     try {
-      savedTags=JSON.parse(ev.target.result);
-      allPhotos.forEach(p=>{if(savedTags[p.name])Object.assign(p,savedTags[p.name]);});
+      const payload = JSON.parse(ev.target.result);
+      if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new Error('invalid');
+      savedTags = Object.fromEntries(Object.entries(payload).map(([name, value]) => [name, normalizeTagRecord(value)]));
+      applySavedTagsToPhotos();
       rebuildFilters(); applyFilter();
       toast(`Tags loaded for ${Object.keys(savedTags).length} photo(s)`);
       startBtn.style.display = allPhotos.length ? 'block' : 'none';
@@ -565,12 +627,32 @@ document.getElementById('tags-import-input').addEventListener('change', e=>{
   r.readAsText(f);
 });
 
-function downloadTags() {
-  const out={};
-  allPhotos.forEach(p=>{if(p.caption||p.year||p.tags.length) out[p.name]={caption:p.caption,year:p.year,tags:p.tags};});
-  const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(new Blob([JSON.stringify(out,null,2)],{type:'application/json'})),download:'tags.json'});
+function downloadTagsFile() {
+  const out = buildTagsPayload();
+  const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(new Blob([JSON.stringify(out,null,2)],{type:'application/json'})),download:'tags.local.json'});
   a.click(); URL.revokeObjectURL(a.href);
-  toast('tags.json downloaded');
+  toast('Downloaded tags.local.json. Save it next to gallery.html to persist changes.');
+}
+
+async function saveTagsFile() {
+  if (IS_FILE_PROTOCOL) {
+    downloadTagsFile();
+    return;
+  }
+  try {
+    const res = await fetch('/__save_tags', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify(buildTagsPayload())
+    });
+    if (res.ok) {
+      const payload = await res.json();
+      const count = payload.count || 0;
+      toast(`Updated tags.local.json with ${count} tagged photo${count!==1?'s':''}`);
+      return;
+    }
+  } catch {}
+  downloadTagsFile();
 }
 
 function toManifestPath(url) {
@@ -641,9 +723,10 @@ function saveTag() {
   p.caption=document.getElementById('tm-caption').value.trim();
   p.year=parseInt(document.getElementById('tm-year').value)||null;
   p.tags=document.getElementById('tm-tags').value.split(',').map(t=>t.trim()).filter(Boolean);
+  savedTags[p.name] = { caption:p.caption, year:p.year, tags:p.tags };
   showInFrame(tagTarget.fi, tagTarget.pi);
   closeTag(); rebuildFilters();
-  toast('Saved! Export tags.json to keep them.');
+  toast('Saved! Use Save Tags to persist tags.local.json.');
 }
 
 function startPS() {
@@ -668,17 +751,26 @@ function updateSpeed(val) {
   stopAllFrames(); startAllFrames();
 }
 
-startBtn.addEventListener('click', ()=>{
+function startGallery() {
+  if (galleryStarted) return;
   if(!allPhotos.length){toast('Load photos first');return;}
+  galleryStarted = true;
   welcomeEl.classList.add('out');
   setTimeout(()=>welcomeEl.style.display='none',900);
   ctrlbar.style.display='flex';
   filtered=allPhotos.map((_,i)=>i);
   document.getElementById('photo-count').textContent=`${filtered.length} photos`;
   rebuildFilters(); buildMosaic(); startAllFrames(); startPS();
-});
+}
 
-startAutoPoll();
+startBtn.addEventListener('click', startGallery);
+
+async function initGallery() {
+  await loadAutoTags();
+  startAutoPoll();
+}
+
+initGallery();
 
 document.addEventListener('keydown', e=>{
   if(e.key==='Escape'){closeTag();closeExport();}

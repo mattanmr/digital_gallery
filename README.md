@@ -5,7 +5,8 @@
 ```
 USB:/
 ├── gallery.html        ← The app (open this on the TV)
-├── tags.json           ← Your saved tags (created after first session)
+├── tags.local.json     ← Your saved tags (created automatically by local server)
+├── tags.template.json  ← Optional tracked template tags file
 └── photos/
     ├── IMG_2023_beach.jpg
     ├── Hanukkah_2022.jpg
@@ -36,7 +37,9 @@ USB:/
 Both scripts:
 - start a local server in this project folder
 - refresh `photos/manifest.local.json` automatically on startup
+- create/update `tags.local.json` automatically on startup
 - open [gallery.html](gallery.html)
+- auto-open the gallery when photos are detected
 - keep the server running until you close the terminal window or press `Ctrl+C`
 
 ### Auto-scan note (important)
@@ -73,18 +76,16 @@ If the gallery is running on a plain static server without the included Python l
 
 ## How tags are saved between sessions
 
-Because the gallery is a local HTML file (not a website), it cannot save data
-automatically. Here's the simple 2-step workflow for `gallery.html`:
+This project keeps a tracked template at `tags.template.json` and uses an ignored local file at `tags.local.json` for real updates.
 
-### At the END of a session:
-- Click **💾 Save Tags** in the control bar
-- Click **⬇ Download tags.json**
-- Copy the downloaded `tags.json` to the USB stick (replace the old one)
+When using the included local server:
+- `tags.local.json` is created automatically on startup if needed
+- the gallery auto-loads tags from `tags.template.json` and `tags.local.json`
+- clicking **💾 Save Tags** updates `tags.local.json` directly
 
-### At the START of the next session:
-- On the welcome screen, click **Import tags.json**
-- Select the `tags.json` from the USB
-- Then load your photos as usual — all captions, years and themes will be applied automatically
+On a plain static server, **💾 Save Tags** falls back to downloading `tags.local.json`, and you can place it next to [gallery.html](gallery.html) manually.
+
+Manual import via **Import tags.json** still works if you want to bring in an older exported tags file.
 
 ---
 
@@ -120,7 +121,7 @@ You can toggle it on/off from the bottom control bar badge (⬚ Pixel Shift: ON/
 | Filter by year    | Year dropdown                    |
 | Filter by theme   | Theme dropdown                   |
 | Tag current photo | Frame hover → “🏷️ edit tags”    |
-| Save tags         | 💾 Save Tags → Download          |
+| Save tags         | 💾 Save Tags (updates `tags.local.json`) |
 | Toggle pixel shift| ⬚ Pixel Shift ON/OFF             |
 | Shuffle shortcut  | S key                            |
 | Close modal       | Esc key                          |
