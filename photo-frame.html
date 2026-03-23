@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Family Gallery</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=EB+Garamond:ital,wght@0,400;1,400&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #1a1510;
+    --wood-dark: #2c1f0e;
+    --wood-mid: #4a3018;
+    --wood-light: #6b4a28;
+    --wood-highlight: #8a6040;
+    --gold: #c8a96e;
+    --gold-light: #e0c896;
+    --mat: #f5f0e8;
+    --mat-shadow: #ddd8cc;
+    --text: #e8dcc8;
+    --text-dim: #8a7a68;
+    --ui-bg: rgba(20, 14, 8, 0.92);
+    --tag-bg: rgba(200, 169, 110, 0.15);
+    --tag-border: rgba(200, 169, 110, 0.4);
+  }
+
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--bg);
+    font-family: 'EB Garamond', serif;
+    color: var(--text);
+    overflow: hidden;
+    user-select: none;
+  }
+
+  /* ── BACKGROUND ── */
+  #bg {
+    position: fixed; inset: 0; z-index: 0;
+    background:
+      radial-gradient(ellipse 80% 60% at 50% 50%, #2a1e10 0%, #100c06 100%);
+  }
+  #bg::before {
+    content: '';
+    position: absolute; inset: 0;
+    background-image:
+      repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,.03) 2px, rgba(0,0,0,.03) 4px),
+      repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(0,0,0,.02) 2px, rgba(0,0,0,.02) 4px);
+    opacity: .6;
+  }
+
+  /* ── WELCOME SCREEN ── */
+  #welcome {
+    position: fixed; inset: 0; z-index: 100;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 32px;
+    background: radial-gradient(ellipse 90% 80% at 50% 50%, #2a1e10 0%, #0e0a05 100%);
+    transition: opacity .8s ease;
+  }
+  #welcome.hidden { opacity: 0; pointer-events: none; }
+
+  .welcome-title {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(2rem, 5vw, 4rem);
+    color: var(--gold-light);
+    text-align: center;
+    letter-spacing: .04em;
+  }
+  .welcome-subtitle {
+    font-size: clamp(1rem, 2vw, 1.4rem);
+    color: var(--text-dim);
+    font-style: italic;
+    text-align: center;
+  }
+
+  .drop-zone {
+    width: min(480px, 88vw);
+    border: 2px dashed var(--gold);
+    border-radius: 4px;
+    padding: 48px 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: background .3s, border-color .3s;
+    position: relative;
+  }
+  .drop-zone:hover, .drop-zone.over {
+    background: rgba(200,169,110,.08);
+    border-color: var(--gold-light);
+  }
+  .drop-zone p { font-size: 1.1rem; color: var(--text-dim); margin-top: 12px; }
+  .drop-zone .icon { font-size: 3rem; }
+  #file-input { display: none; }
+
+  .btn-gold {
+    background: linear-gradient(135deg, #c8a96e, #a07840);
+    color: #1a0f00;
+    border: none; border-radius: 3px;
+    padding: 14px 40px;
+    font-family: 'Playfair Display', serif;
+    font-size: 1.1rem;
+    letter-spacing: .06em;
+    cursor: pointer;
+    transition: filter .2s, transform .1s;
+  }
+  .btn-gold:hover { filter: brightness(1.15); transform: translateY(-1px); }
+  .btn-gold:active { transform: translateY(0); }
+
+  /* ── MAIN STAGE ── */
+  #stage {
+    position: fixed; inset: 0; z-index: 1;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  /* ── FRAME ── */
+  #frame-wrap {
+    position: relative;
+    transition: opacity .7s ease;
+  }
+  #frame-wrap.fade { opacity: 0; }
+
+  .frame-outer {
+    position: relative;
+    padding: 22px;
+    background:
+      linear-gradient(135deg, #8a6040 0%, #4a3018 20%, #2c1f0e 40%, #4a3018 60%, #6b4a28 80%, #8a6040 100%);
+    box-shadow:
+      0 0 0 2px #c8a96e,
+      4px 4px 0 2px #2c1f0e,
+      8px 8px 40px rgba(0,0,0,.8),
+      inset 0 1px 0 rgba(255,255,255,.08),
+      inset 0 -1px 0 rgba(0,0,0,.4);
+    border-radius: 2px;
+  }
+
+  /* Wood grain texture via SVG filter */
+  .frame-outer::before {
+    content: '';
+    position: absolute; inset: 0;
+    border-radius: 2px;
+    background-image:
+      repeating-linear-gradient(
+        12deg,
+        transparent, transparent 3px,
+        rgba(0,0,0,.07) 3px, rgba(0,0,0,.07) 4px
+      ),
+      repeating-linear-gradient(
+        175deg,
+        transparent, transparent 8px,
+        rgba(255,255,255,.03) 8px, rgba(255,255,255,.03) 9px
+      );
+    pointer-events: none;
+  }
+
+  /* Inner gold liner */
+  .frame-liner {
+    padding: 6px;
+    background: linear-gradient(135deg, #c8a96e, #8a6040, #c8a96e, #a07840);
+    box-shadow: inset 0 1px 3px rgba(0,0,0,.5);
+  }
+
+  /* Mat board */
+  .frame-mat {
+    padding: 28px;
+    background: var(--mat);
+    box-shadow: inset 0 0 20px rgba(0,0,0,.15);
+    position: relative;
+  }
+  .frame-mat::after {
+    content: '';
+    position: absolute; inset: 0;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,.12);
+    pointer-events: none;
+  }
+
+  /* Photo */
+  #photo {
+    display: block;
+    max-width: 100%;
+    object-fit: contain;
+    box-shadow: 0 2px 12px rgba(0,0,0,.35);
+  }
+
+  /* Caption strip below mat */
+  #caption {
+    background: var(--mat-shadow);
+    padding: 8px 16px 10px;
+    text-align: center;
+    font-family: 'EB Garamond', serif;
+    font-style: italic;
+    font-size: .95rem;
+    color: #5a4030;
+    min-height: 32px;
+    border-top: 1px solid rgba(0,0,0,.1);
+  }
+
+  /* ── UI OVERLAY ── */
+  #ui {
+    position: fixed; inset: 0; z-index: 10;
+    pointer-events: none;
+  }
+
+  /* TOP BAR */
+  #topbar {
+    position: absolute; top: 0; left: 0; right: 0;
+    display: flex; align-items: center; gap: 12px;
+    padding: 16px 24px;
+    background: linear-gradient(to bottom, rgba(10,6,2,.9) 0%, transparent 100%);
+    pointer-events: all;
+    opacity: 0;
+    transition: opacity .4s;
+  }
+  #ui:hover #topbar, #topbar:hover { opacity: 1; }
+
+  .gallery-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.3rem;
+    color: var(--gold-light);
+    letter-spacing: .05em;
+    flex: 1;
+  }
+
+  /* Filters */
+  #filters {
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  }
+  .filter-label {
+    font-size: .8rem;
+    color: var(--text-dim);
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+  select.filter-sel {
+    background: var(--ui-bg);
+    color: var(--gold-light);
+    border: 1px solid var(--tag-border);
+    border-radius: 3px;
+    padding: 6px 12px;
+    font-family: 'EB Garamond', serif;
+    font-size: .9rem;
+    cursor: pointer;
+    outline: none;
+  }
+  select.filter-sel:focus { border-color: var(--gold); }
+
+  #shuffle-btn, #add-btn {
+    background: var(--tag-bg);
+    border: 1px solid var(--tag-border);
+    color: var(--gold-light);
+    border-radius: 3px;
+    padding: 6px 14px;
+    font-family: 'EB Garamond', serif;
+    font-size: .9rem;
+    cursor: pointer;
+    transition: background .2s;
+    pointer-events: all;
+  }
+  #shuffle-btn:hover, #add-btn:hover { background: rgba(200,169,110,.25); }
+
+  /* BOTTOM BAR */
+  #bottombar {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    display: flex; align-items: center; justify-content: center; gap: 20px;
+    padding: 20px 24px;
+    background: linear-gradient(to top, rgba(10,6,2,.9) 0%, transparent 100%);
+    pointer-events: all;
+    opacity: 0;
+    transition: opacity .4s;
+  }
+  #ui:hover #bottombar, #bottombar:hover { opacity: 1; }
+
+  .ctrl-btn {
+    background: var(--tag-bg);
+    border: 1px solid var(--tag-border);
+    color: var(--gold-light);
+    width: 48px; height: 48px;
+    border-radius: 50%;
+    font-size: 1.3rem;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background .2s, transform .1s;
+    pointer-events: all;
+  }
+  .ctrl-btn:hover { background: rgba(200,169,110,.3); transform: scale(1.1); }
+  .ctrl-btn:active { transform: scale(.95); }
+  .ctrl-btn.large { width: 60px; height: 60px; font-size: 1.6rem; }
+
+  #play-btn { width: 60px; height: 60px; font-size: 1.5rem; }
+
+  #counter {
+    font-size: .85rem;
+    color: var(--text-dim);
+    min-width: 80px;
+    text-align: center;
+    font-style: italic;
+  }
+
+  #speed-label {
+    font-size: .8rem;
+    color: var(--text-dim);
+    text-align: center;
+  }
+  #speed-slider {
+    -webkit-appearance: none;
+    width: 100px; height: 4px;
+    background: var(--tag-border);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+  #speed-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--gold);
+    cursor: pointer;
+  }
+
+  /* PROGRESS BAR */
+  #progress-bar {
+    position: fixed; bottom: 0; left: 0;
+    height: 3px;
+    background: linear-gradient(to right, var(--gold), var(--gold-light));
+    transition: width linear;
+    z-index: 20;
+    box-shadow: 0 0 8px var(--gold);
+  }
+
+  /* EMPTY STATE */
+  #empty {
+    display: none;
+    position: fixed; inset: 0; z-index: 5;
+    align-items: center; justify-content: center;
+    flex-direction: column; gap: 16px;
+    color: var(--text-dim);
+    font-style: italic;
+    font-size: 1.2rem;
+  }
+  #empty.show { display: flex; }
+
+  /* TOAST */
+  #toast {
+    position: fixed; top: 80px; left: 50%;
+    transform: translateX(-50%);
+    background: var(--ui-bg);
+    border: 1px solid var(--tag-border);
+    color: var(--gold-light);
+    padding: 10px 24px;
+    border-radius: 3px;
+    font-size: .9rem;
+    font-style: italic;
+    z-index: 50;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .3s;
+  }
+  #toast.show { opacity: 1; }
+
+  /* TAG EDITOR MODAL */
+  #tag-modal {
+    display: none;
+    position: fixed; inset: 0; z-index: 200;
+    background: rgba(0,0,0,.7);
+    align-items: center; justify-content: center;
+  }
+  #tag-modal.show { display: flex; }
+  .modal-box {
+    background: #1e160a;
+    border: 1px solid var(--gold);
+    border-radius: 4px;
+    padding: 32px;
+    width: min(440px, 90vw);
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .modal-box h3 {
+    font-family: 'Playfair Display', serif;
+    color: var(--gold-light);
+    font-size: 1.3rem;
+  }
+  .modal-box label { font-size: .9rem; color: var(--text-dim); }
+  .modal-box input, .modal-box textarea {
+    background: rgba(255,255,255,.05);
+    border: 1px solid var(--tag-border);
+    border-radius: 3px;
+    color: var(--text);
+    padding: 8px 12px;
+    font-family: 'EB Garamond', serif;
+    font-size: 1rem;
+    width: 100%;
+    outline: none;
+  }
+  .modal-box input:focus, .modal-box textarea:focus { border-color: var(--gold); }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+  .btn-cancel {
+    background: transparent;
+    border: 1px solid var(--tag-border);
+    color: var(--text-dim);
+    padding: 8px 20px; border-radius: 3px;
+    cursor: pointer; font-family: 'EB Garamond', serif; font-size: 1rem;
+  }
+</style>
+</head>
+<body>
+
+<!-- BACKGROUND -->
+<div id="bg"></div>
+
+<!-- WELCOME SCREEN -->
+<div id="welcome">
+  <div class="welcome-title">Family Gallery</div>
+  <div class="welcome-subtitle">Your memories, beautifully framed</div>
+
+  <div class="drop-zone" id="drop-zone">
+    <div class="icon">🖼️</div>
+    <p>Drop photos here, or click to choose</p>
+    <p style="font-size:.85rem;margin-top:8px;color:var(--text-dim)">JPG, PNG, HEIC, GIF, WEBP</p>
+    <input type="file" id="file-input" multiple accept="image/*">
+  </div>
+
+  <button class="btn-gold" id="start-btn" style="display:none">Open Gallery →</button>
+</div>
+
+<!-- EMPTY STATE -->
+<div id="empty">
+  <span>No photos match the current filter</span>
+  <button class="btn-gold" onclick="clearFilters()" style="font-size:.9rem;padding:10px 24px">Clear Filters</button>
+</div>
+
+<!-- MAIN STAGE -->
+<div id="stage" style="display:none">
+  <div id="frame-wrap">
+    <div class="frame-outer">
+      <div class="frame-liner">
+        <div class="frame-mat">
+          <img id="photo" src="" alt="">
+        </div>
+        <div id="caption"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PROGRESS BAR -->
+<div id="progress-bar" style="width:0%"></div>
+
+<!-- UI OVERLAY -->
+<div id="ui" style="display:none">
+  <!-- TOP BAR -->
+  <div id="topbar">
+    <span class="gallery-title">📷 Family Gallery</span>
+    <div id="filters">
+      <span class="filter-label">Year</span>
+      <select class="filter-sel" id="year-sel" onchange="applyFilters()">
+        <option value="">All</option>
+      </select>
+      <span class="filter-label">Theme</span>
+      <select class="filter-sel" id="tag-sel" onchange="applyFilters()">
+        <option value="">All</option>
+      </select>
+      <button id="shuffle-btn" onclick="shuffleQueue()">🔀 Shuffle</button>
+      <button id="add-btn" onclick="openFilePicker()">＋ Add Photos</button>
+      <button id="add-btn" onclick="openTagModal()" style="margin-left:4px">🏷️ Tag Photo</button>
+    </div>
+  </div>
+
+  <!-- BOTTOM BAR -->
+  <div id="bottombar">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+      <span id="speed-label">⏱ <span id="speed-val">8</span>s</span>
+      <input type="range" id="speed-slider" min="3" max="30" value="8" oninput="updateSpeed(this.value)">
+    </div>
+    <button class="ctrl-btn" onclick="prevPhoto()">◀</button>
+    <button class="ctrl-btn large" id="play-btn" onclick="togglePlay()">⏸</button>
+    <button class="ctrl-btn" onclick="nextPhoto()">▶</button>
+    <span id="counter">1 / 1</span>
+  </div>
+</div>
+
+<!-- TAG MODAL -->
+<div id="tag-modal">
+  <div class="modal-box">
+    <h3>Tag This Photo</h3>
+    <label>Caption / Title</label>
+    <input type="text" id="tag-caption" placeholder="e.g. Summer in Greece">
+    <label>Year</label>
+    <input type="number" id="tag-year" placeholder="e.g. 2023" min="1900" max="2099">
+    <label>Themes (comma separated)</label>
+    <input type="text" id="tag-themes" placeholder="e.g. Beach, Vacation, Kids">
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeTagModal()">Cancel</button>
+      <button class="btn-gold" onclick="saveTag()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script>
+// ── STATE ──
+let allPhotos = [];    // { url, name, year, tags:[], caption }
+let queue = [];        // indices into allPhotos (filtered)
+let queuePos = 0;
+let playing = true;
+let slideInterval = null;
+let slideDuration = 8000;
+let progressStart = null;
+let progressAnim = null;
+
+const photoEl   = document.getElementById('photo');
+const frameWrap = document.getElementById('frame-wrap');
+const stage     = document.getElementById('stage');
+const ui        = document.getElementById('ui');
+const welcome   = document.getElementById('welcome');
+const counter   = document.getElementById('counter');
+const caption   = document.getElementById('caption');
+const emptyEl   = document.getElementById('empty');
+const yearSel   = document.getElementById('year-sel');
+const tagSel    = document.getElementById('tag-sel');
+const playBtn   = document.getElementById('play-btn');
+const progBar   = document.getElementById('progress-bar');
+const fileInput = document.getElementById('file-input');
+const startBtn  = document.getElementById('start-btn');
+const dropZone  = document.getElementById('drop-zone');
+
+// ── FILE LOADING ──
+function loadFiles(files) {
+  const imgs = [...files].filter(f => f.type.startsWith('image/'));
+  if (!imgs.length) return;
+  let loaded = 0;
+  imgs.forEach(file => {
+    const url = URL.createObjectURL(file);
+    const yearMatch = file.name.match(/\b(19|20)\d{2}\b/);
+    const year = yearMatch ? parseInt(yearMatch[0]) : null;
+    allPhotos.push({ url, name: file.name.replace(/\.[^.]+$/, ''), year, tags: [], caption: '' });
+    loaded++;
+    if (loaded === imgs.length) {
+      startBtn.style.display = 'block';
+      toast(`${loaded} photo${loaded>1?'s':''} loaded`);
+    }
+  });
+}
+
+fileInput.addEventListener('change', e => loadFiles(e.target.files));
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('over');
+  loadFiles(e.dataTransfer.files);
+});
+
+startBtn.addEventListener('click', startGallery);
+
+function openFilePicker() { fileInput.click(); }
+fileInput.addEventListener('change', e => {
+  loadFiles(e.target.files);
+  rebuildFilters();
+  applyFilters();
+});
+
+// ── START GALLERY ──
+function startGallery() {
+  welcome.classList.add('hidden');
+  setTimeout(() => welcome.style.display = 'none', 800);
+  stage.style.display = 'flex';
+  ui.style.display = 'block';
+  rebuildFilters();
+  applyFilters();
+  startSlideshow();
+}
+
+// ── FILTERS ──
+function rebuildFilters() {
+  const years = [...new Set(allPhotos.map(p => p.year).filter(Boolean))].sort();
+  const tags  = [...new Set(allPhotos.flatMap(p => p.tags))].sort();
+
+  yearSel.innerHTML = '<option value="">All Years</option>' +
+    years.map(y => `<option value="${y}">${y}</option>`).join('');
+  tagSel.innerHTML  = '<option value="">All Themes</option>' +
+    tags.map(t => `<option value="${t}">${t}</option>`).join('');
+}
+
+function applyFilters() {
+  const year = yearSel.value;
+  const tag  = tagSel.value;
+  let filtered = allPhotos.map((p,i) => i);
+
+  if (year) filtered = filtered.filter(i => allPhotos[i].year == year);
+  if (tag)  filtered = filtered.filter(i => allPhotos[i].tags.includes(tag));
+
+  queue = filtered;
+  queuePos = 0;
+
+  if (!queue.length) {
+    emptyEl.classList.add('show');
+    stage.style.display = 'none';
+    stopSlideshow();
+  } else {
+    emptyEl.classList.remove('show');
+    stage.style.display = 'flex';
+    showPhoto(queue[0]);
+    if (playing) startSlideshow();
+  }
+  updateCounter();
+}
+
+function clearFilters() {
+  yearSel.value = ''; tagSel.value = '';
+  applyFilters();
+}
+
+function shuffleQueue() {
+  for (let i = queue.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i+1));
+    [queue[i], queue[j]] = [queue[j], queue[i]];
+  }
+  queuePos = 0;
+  showPhoto(queue[0]);
+  restartProgress();
+  toast('Shuffled!');
+}
+
+// ── DISPLAY ──
+function showPhoto(idx) {
+  const p = allPhotos[idx];
+  if (!p) return;
+
+  frameWrap.classList.add('fade');
+  setTimeout(() => {
+    photoEl.src = p.url;
+    photoEl.onload = () => {
+      fitFrame();
+      caption.textContent = p.caption || p.name || '';
+      frameWrap.classList.remove('fade');
+    };
+  }, 350);
+}
+
+function fitFrame() {
+  const maxW = window.innerWidth  * 0.82;
+  const maxH = window.innerHeight * 0.78;
+  const nat = { w: photoEl.naturalWidth, h: photoEl.naturalHeight };
+  const ratio = nat.w / nat.h;
+
+  let w = Math.min(maxW, nat.w);
+  let h = w / ratio;
+  if (h > maxH) { h = maxH; w = h * ratio; }
+
+  photoEl.style.width  = Math.round(w) + 'px';
+  photoEl.style.height = Math.round(h) + 'px';
+}
+
+window.addEventListener('resize', fitFrame);
+
+function updateCounter() {
+  counter.textContent = queue.length
+    ? `${queuePos + 1} / ${queue.length}`
+    : '0 / 0';
+}
+
+// ── NAVIGATION ──
+function nextPhoto() {
+  if (!queue.length) return;
+  queuePos = (queuePos + 1) % queue.length;
+  showPhoto(queue[queuePos]);
+  updateCounter();
+  restartProgress();
+}
+
+function prevPhoto() {
+  if (!queue.length) return;
+  queuePos = (queuePos - 1 + queue.length) % queue.length;
+  showPhoto(queue[queuePos]);
+  updateCounter();
+  restartProgress();
+}
+
+// Keyboard navigation
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown') nextPhoto();
+  if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   prevPhoto();
+  if (e.key === ' ') { e.preventDefault(); togglePlay(); }
+});
+
+// ── SLIDESHOW ──
+function startSlideshow() {
+  stopSlideshow();
+  slideInterval = setInterval(nextPhoto, slideDuration);
+  restartProgress();
+  playBtn.textContent = '⏸';
+}
+
+function stopSlideshow() {
+  clearInterval(slideInterval);
+  slideInterval = null;
+  cancelAnimationFrame(progressAnim);
+  progBar.style.width = '0%';
+  progBar.style.transition = 'none';
+}
+
+function togglePlay() {
+  playing = !playing;
+  if (playing) { startSlideshow(); toast('Playing'); }
+  else         { stopSlideshow(); playBtn.textContent = '▶'; toast('Paused'); }
+}
+
+function restartProgress() {
+  cancelAnimationFrame(progressAnim);
+  progBar.style.transition = 'none';
+  progBar.style.width = '0%';
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      progBar.style.transition = `width ${slideDuration}ms linear`;
+      progBar.style.width = '100%';
+    });
+  });
+}
+
+function updateSpeed(val) {
+  slideDuration = val * 1000;
+  document.getElementById('speed-val').textContent = val;
+  if (playing) startSlideshow();
+}
+
+// ── TAGGING ──
+let taggingIdx = null;
+
+function openTagModal() {
+  if (!queue.length) return;
+  taggingIdx = queue[queuePos];
+  const p = allPhotos[taggingIdx];
+  document.getElementById('tag-caption').value = p.caption || '';
+  document.getElementById('tag-year').value    = p.year    || '';
+  document.getElementById('tag-themes').value  = p.tags.join(', ');
+  document.getElementById('tag-modal').classList.add('show');
+}
+
+function closeTagModal() {
+  document.getElementById('tag-modal').classList.remove('show');
+  taggingIdx = null;
+}
+
+function saveTag() {
+  if (taggingIdx === null) return;
+  const p = allPhotos[taggingIdx];
+  p.caption = document.getElementById('tag-caption').value.trim();
+  p.year    = parseInt(document.getElementById('tag-year').value) || null;
+  p.tags    = document.getElementById('tag-themes').value
+    .split(',').map(t => t.trim()).filter(Boolean);
+
+  caption.textContent = p.caption || p.name || '';
+  closeTagModal();
+  rebuildFilters();
+  toast('Tags saved!');
+}
+
+// ── TOAST ──
+function toast(msg, dur = 2000) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), dur);
+}
+</script>
+</body>
+</html>
