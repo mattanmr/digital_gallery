@@ -244,7 +244,7 @@
   }
   select.filter-sel:focus { border-color: var(--gold); }
 
-  #shuffle-btn, #add-btn {
+  #shuffle-btn, #add-btn, #tag-btn {
     background: var(--tag-bg);
     border: 1px solid var(--tag-border);
     color: var(--gold-light);
@@ -256,7 +256,7 @@
     transition: background .2s;
     pointer-events: all;
   }
-  #shuffle-btn:hover, #add-btn:hover { background: rgba(200,169,110,.25); }
+  #shuffle-btn:hover, #add-btn:hover, #tag-btn:hover { background: rgba(200,169,110,.25); }
 
   /* BOTTOM BAR */
   #bottombar {
@@ -399,6 +399,68 @@
     padding: 8px 20px; border-radius: 3px;
     cursor: pointer; font-family: 'EB Garamond', serif; font-size: 1rem;
   }
+
+  /* EXPORT MODAL */
+  #export-modal {
+    display: none;
+    position: fixed; inset: 0; z-index: 200;
+    background: rgba(0,0,0,.7);
+    align-items: center; justify-content: center;
+  }
+  #export-modal.show { display: flex; }
+  .export-box {
+    background: #1e160a;
+    border: 1px solid var(--gold);
+    border-radius: 4px;
+    padding: 32px;
+    width: min(460px, 90vw);
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .export-box h3 {
+    font-family: 'Playfair Display', serif;
+    color: var(--gold-light);
+    font-size: 1.3rem;
+  }
+  .export-box p { font-size: .9rem; color: var(--text-dim); line-height: 1.6; }
+
+  /* SAVE-TAGS button in topbar */
+  #save-tags-btn {
+    background: var(--tag-bg);
+    border: 1px solid var(--tag-border);
+    color: var(--gold-light);
+    border-radius: 3px;
+    padding: 6px 14px;
+    font-family: 'EB Garamond', serif;
+    font-size: .9rem;
+    cursor: pointer;
+    transition: background .2s;
+    pointer-events: all;
+  }
+  #save-tags-btn:hover { background: rgba(200,169,110,.25); }
+
+  /* import-box on welcome screen */
+  .import-box {
+    width: min(480px, 88vw);
+    border: 1px solid rgba(200,169,110,.3);
+    border-radius: 4px;
+    padding: 28px 32px;
+    text-align: center;
+    background: rgba(200,169,110,.04);
+    display: flex; flex-direction: column; align-items: center; gap: 12px;
+  }
+  .import-box p { font-size: .95rem; color: var(--text-dim); line-height: 1.55; }
+  .btn-outline {
+    background: transparent;
+    color: var(--gold-light);
+    border: 1px solid rgba(200,169,110,.35);
+    border-radius: 3px;
+    padding: 10px 28px;
+    font-family: 'EB Garamond', serif;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background .2s;
+  }
+  .btn-outline:hover { background: rgba(200,169,110,.1); }
 </style>
 </head>
 <body>
@@ -416,6 +478,13 @@
     <p>Drop photos here, or click to choose</p>
     <p style="font-size:.85rem;margin-top:8px;color:var(--text-dim)">JPG, PNG, HEIC, GIF, WEBP</p>
     <input type="file" id="file-input" multiple accept="image/*">
+  </div>
+
+  <div class="import-box">
+    <div style="font-size:2rem">🏷️</div>
+    <p>Have a <code style="background:rgba(255,255,255,.07);border-radius:2px;padding:1px 5px;font-size:.82rem;color:var(--gold-light)">tags.json</code> from a previous session? Import it to restore captions, years and themes.</p>
+    <button class="btn-outline" onclick="document.getElementById('tags-import-input').click()">Import tags.json</button>
+    <input type="file" id="tags-import-input" accept=".json" style="display:none">
   </div>
 
   <button class="btn-gold" id="start-btn" style="display:none">Open Gallery →</button>
@@ -460,7 +529,8 @@
       </select>
       <button id="shuffle-btn" onclick="shuffleQueue()">🔀 Shuffle</button>
       <button id="add-btn" onclick="openFilePicker()">＋ Add Photos</button>
-      <button id="add-btn" onclick="openTagModal()" style="margin-left:4px">🏷️ Tag Photo</button>
+      <button id="tag-btn" onclick="openTagModal()" style="margin-left:4px">🏷️ Tag Photo</button>
+      <button id="save-tags-btn" onclick="openSaveTagsModal()" style="margin-left:4px">💾 Save Tags</button>
     </div>
   </div>
 
@@ -494,12 +564,26 @@
   </div>
 </div>
 
+<!-- EXPORT MODAL -->
+<div id="export-modal">
+  <div class="export-box">
+    <h3>Save Your Tags</h3>
+    <p>Click <strong style="color:var(--gold-light)">Download tags.json</strong> and save it to your USB stick alongside <code style="background:rgba(255,255,255,.07);border-radius:2px;padding:1px 5px;font-size:.85rem;color:var(--gold-light)">photo-frame.html</code>.<br><br>
+    Next session, use <strong style="color:var(--gold-light)">Import tags.json</strong> on the welcome screen to restore everything.</p>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeSaveTagsModal()">Close</button>
+      <button class="btn-gold" onclick="downloadTags()">⬇ Download tags.json</button>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div id="toast"></div>
 
 <script>
 // ── STATE ──
 let allPhotos = [];    // { url, name, year, tags:[], caption }
+let savedTags = {};   // persisted tag data keyed by photo name
 let queue = [];        // indices into allPhotos (filtered)
 let queuePos = 0;
 let playing = true;
@@ -526,14 +610,21 @@ const dropZone  = document.getElementById('drop-zone');
 
 // ── FILE LOADING ──
 function loadFiles(files) {
-  const imgs = [...files].filter(f => f.type.startsWith('image/'));
+  const imgs = [...files].filter(f => f.type.startsWith('image/') || /\.(heic|heif)$/i.test(f.name));
   if (!imgs.length) return;
   let loaded = 0;
   imgs.forEach(file => {
     const url = URL.createObjectURL(file);
+    const cleanName = file.name.replace(/\.[^.]+$/, '');
     const yearMatch = file.name.match(/\b(19|20)\d{2}\b/);
-    const year = yearMatch ? parseInt(yearMatch[0]) : null;
-    allPhotos.push({ url, name: file.name.replace(/\.[^.]+$/, ''), year, tags: [], caption: '' });
+    const saved = savedTags[cleanName] || {};
+    allPhotos.push({
+      url,
+      name: cleanName,
+      year:    saved.year    ?? (yearMatch ? parseInt(yearMatch[0]) : null),
+      tags:    saved.tags    ?? [],
+      caption: saved.caption ?? ''
+    });
     loaded++;
     if (loaded === imgs.length) {
       startBtn.style.display = 'block';
@@ -542,7 +633,34 @@ function loadFiles(files) {
   });
 }
 
-fileInput.addEventListener('change', e => loadFiles(e.target.files));
+// ── TAGS.JSON IMPORT ──
+document.getElementById('tags-import-input').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = ev => {
+    try {
+      savedTags = JSON.parse(ev.target.result);
+      allPhotos.forEach(p => {
+        const s = savedTags[p.name];
+        if (s) {
+          if (typeof s.caption === 'string') p.caption = s.caption;
+          if (s.year !== undefined) p.year = s.year !== null ? parseInt(s.year) || null : null;
+          if (Array.isArray(s.tags)) p.tags = s.tags.map(String).filter(Boolean);
+        }
+      });
+      rebuildFilters(); applyFilters();
+      toast(`Tags loaded for ${Object.keys(savedTags).length} photo(s)`);
+      startBtn.style.display = 'block';
+    } catch { toast('Invalid tags.json'); }
+  };
+  r.readAsText(f);
+});
+
+fileInput.addEventListener('change', e => {
+  loadFiles(e.target.files);
+  rebuildFilters();
+  applyFilters();
+});
 dropZone.addEventListener('click', () => fileInput.click());
 dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('over'); });
 dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over'));
@@ -554,11 +672,6 @@ dropZone.addEventListener('drop', e => {
 startBtn.addEventListener('click', startGallery);
 
 function openFilePicker() { fileInput.click(); }
-fileInput.addEventListener('change', e => {
-  loadFiles(e.target.files);
-  rebuildFilters();
-  applyFilters();
-});
 
 // ── START GALLERY ──
 function startGallery() {
@@ -573,7 +686,7 @@ function startGallery() {
 
 // ── FILTERS ──
 function rebuildFilters() {
-  const years = [...new Set(allPhotos.map(p => p.year).filter(Boolean))].sort();
+  const years = [...new Set(allPhotos.map(p => p.year).filter(Boolean))].sort((a,b) => a-b);
   const tags  = [...new Set(allPhotos.flatMap(p => p.tags))].sort();
 
   yearSel.innerHTML = '<option value="">All Years</option>' +
@@ -587,7 +700,7 @@ function applyFilters() {
   const tag  = tagSel.value;
   let filtered = allPhotos.map((p,i) => i);
 
-  if (year) filtered = filtered.filter(i => allPhotos[i].year == year);
+  if (year) filtered = filtered.filter(i => String(allPhotos[i].year) === year);
   if (tag)  filtered = filtered.filter(i => allPhotos[i].tags.includes(tag));
 
   queue = filtered;
@@ -682,6 +795,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'ArrowRight' || e.key === 'ArrowDown') nextPhoto();
   if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   prevPhoto();
   if (e.key === ' ') { e.preventDefault(); togglePlay(); }
+  if (e.key === 'Escape') { closeTagModal(); closeSaveTagsModal(); }
 });
 
 // ── SLIDESHOW ──
@@ -754,6 +868,27 @@ function saveTag() {
   closeTagModal();
   rebuildFilters();
   toast('Tags saved!');
+}
+
+// ── SAVE / EXPORT TAGS ──
+function openSaveTagsModal() {
+  document.getElementById('export-modal').classList.add('show');
+}
+function closeSaveTagsModal() {
+  document.getElementById('export-modal').classList.remove('show');
+}
+function downloadTags() {
+  const out = {};
+  allPhotos.forEach(p => {
+    if (p.caption || p.year !== null || p.tags.length)
+      out[p.name] = { caption: p.caption, year: p.year, tags: p.tags };
+  });
+  const a = Object.assign(document.createElement('a'), {
+    href: URL.createObjectURL(new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' })),
+    download: 'tags.json'
+  });
+  a.click(); URL.revokeObjectURL(a.href);
+  toast('tags.json downloaded');
 }
 
 // ── TOAST ──

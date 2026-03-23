@@ -32,7 +32,7 @@ USB:/
 ## How tags are saved between sessions
 
 Because the gallery is a local HTML file (not a website), it cannot save data
-automatically. Here's the simple 2-step workflow:
+automatically. Here's the simple 2-step workflow (works in **both** `gallery.html` and `photo-frame.html`):
 
 ### At the END of a session:
 - Click **💾 Save Tags** in the top bar

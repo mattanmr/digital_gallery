@@ -449,7 +449,7 @@ function startPS() {
   psTimer=setInterval(()=>{
     const x=Math.round((Math.random()-.5)*2*9), y=Math.round((Math.random()-.5)*2*9);
     psRoot.style.transform=`translate(${x}px,${y}px)`;
-  }, 28000);
+  }, 30000);
 }
 function stopPS() { clearInterval(psTimer); psRoot.style.transform='translate(0,0)'; }
 function togglePS() {
