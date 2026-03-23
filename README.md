@@ -25,7 +25,13 @@ USB:/
    - `file:///media/usb/gallery.html`
    - `file:///mnt/usb/gallery.html`
    - Or navigate using the TV browser's file manager if it has one.
-7. When the gallery opens, click the drop zone and navigate to `photos/` to load your images.
+7. The gallery now auto-scans `photos/` every ~10 seconds and adds new files automatically.
+8. Optional fallback: you can still click the drop zone to load files manually.
+
+### Auto-scan note (important)
+
+Automatic folder polling works when the gallery is opened through a local web server (for example `http://127.0.0.1:4173/gallery.html`).
+On strict `file:///` environments, some browsers block folder listing — manual file loading remains available.
 
 ---
 
@@ -72,6 +78,7 @@ You can toggle it on/off from the bottom control bar badge (⬚ Pixel Shift: ON/
 | Speed             | Slider (4s – 40s per cycle)      |
 | Shuffle           | 🔀 button                        |
 | Add photos        | ＋ Photos button                 |
+| Auto add from folder | Drop files into `photos/` (polled every ~10s) |
 | Filter by year    | Year dropdown                    |
 | Filter by theme   | Theme dropdown                   |
 | Tag current photo | Frame hover → “🏷️ edit tags”    |
@@ -88,4 +95,5 @@ Hover anywhere on screen to reveal the control bar.
 
 - If the font doesn't load (no internet on TV), the gallery still works fine — it falls back to a serif font.
 - If the browser blocks local file access, try a different browser app on the TV, or use a laptop connected to the TV via HDMI instead.
+- If auto-scan doesn't detect files on TV browser, use the manual file picker (this is a browser security limitation, not a gallery bug).
 - For the best experience, put the TV browser in **fullscreen mode** (usually F11 or the TV remote's full-screen button).

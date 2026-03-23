@@ -92,7 +92,9 @@ html, body { width:100%; height:100%; overflow:hidden; font-family:'Cormorant Ga
 .frame-shell.dark-mat .f-mat { background:var(--mat-dark); }
 
 .f-photo-wrap { position:absolute; inset:28px; overflow:hidden; background:#111; }
-.f-photo { width:100%; height:100%; object-fit:cover; display:block; transition:opacity .9s ease; }
+.f-photo { width:100%; height:100%; display:block; transition:opacity .9s ease; }
+.f-photo.fit-cover { object-fit:cover; }
+.f-photo.fit-contain { object-fit:contain; background:#120d08; }
 .f-photo.fade { opacity:0; }
 
 .f-caption { position:absolute; bottom:20px; left:28px; right:28px; text-align:center; font-style:italic; font-size:clamp(.5rem,.85vw,.78rem); color:#6a5040; pointer-events:none; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
@@ -263,6 +265,9 @@ const NUM_FRAMES  = 8;
 const TILTS       = [-.7,.4,-1.1,.3,-.5,.9,-.3,.6];
 const DARK_MATS   = new Set([1,4,6]);
 const SPEED_JITTER = 0.45;
+const AUTO_PHOTO_DIR = 'photos/';
+const AUTO_POLL_MS = 10000;
+const IMG_EXT_RE = /\.(jpg|jpeg|png|webp|gif|bmp|avif|heic|heif)$/i;
 
 let allPhotos = [];
 let filtered  = [];
@@ -271,6 +276,9 @@ let frameState = [];
 let baseSpeed = 10000;
 let psOn = true, psTimer = null;
 let tagTarget = null;
+let autoPollTimer = null;
+let autoPollNoticeShown = false;
+const seenPhotoKeys = new Set();
 
 const mosaicEl = document.getElementById('mosaic');
 const welcomeEl = document.getElementById('welcome');
@@ -324,10 +332,19 @@ function showInFrame(fi, pi) {
   const hiN  = document.getElementById(`fhi-name-${fi}`);
   const hiM  = document.getElementById(`fhi-meta-${fi}`);
   const hiT  = document.getElementById(`fhi-tag-${fi}`);
+  img.classList.remove('fit-cover','fit-contain');
   img.classList.add('fade');
   setTimeout(() => {
     img.src = p.url;
-    img.onload = () => { wrap.classList.remove('empty'); img.classList.remove('fade'); };
+    img.onload = () => {
+      const wrapRatio = Math.max(0.01, wrap.clientWidth / Math.max(1, wrap.clientHeight));
+      const imgRatio = Math.max(0.01, (img.naturalWidth || 1) / Math.max(1, (img.naturalHeight || 1)));
+      const mismatch = Math.abs(Math.log(imgRatio / wrapRatio));
+      const fitClass = mismatch > 0.42 ? 'fit-contain' : 'fit-cover';
+      img.classList.add(fitClass);
+      wrap.classList.remove('empty');
+      img.classList.remove('fade');
+    };
     const yr = p.year ? ` · ${p.year}` : '';
     cap.textContent  = (p.caption||'') + yr;
     hiN.textContent  = p.caption || p.name || '—';
@@ -377,17 +394,112 @@ function applyFilter() {
   stopAllFrames(); startAllFrames();
 }
 
+function addPhotoEntry({ url, cleanName, key }) {
+  if (!url || !cleanName || seenPhotoKeys.has(key)) return false;
+  seenPhotoKeys.add(key);
+  const yrMatch = cleanName.match(/\b(19|20)\d{2}\b/);
+  const saved = savedTags[cleanName] || {};
+  allPhotos.push({
+    url,
+    name: cleanName,
+    year: saved.year ?? (yrMatch ? parseInt(yrMatch[0]) : null),
+    tags: saved.tags ?? [],
+    caption: saved.caption ?? ''
+  });
+  return true;
+}
+
 function loadFiles(files) {
   const imgs = [...files].filter(f=>f.type.startsWith('image/')||/\.(heic|heif)$/i.test(f.name));
   if (!imgs.length) return;
+  let added = 0;
   imgs.forEach(file => {
-    const url=URL.createObjectURL(file), cleanName=file.name.replace(/\.[^.]+$/,'');
-    const yrMatch=file.name.match(/\b(19|20)\d{2}\b/);
-    const saved=savedTags[cleanName]||{};
-    allPhotos.push({ url, name:cleanName, year:saved.year??(yrMatch?parseInt(yrMatch[0]):null), tags:saved.tags??[], caption:saved.caption??'' });
+    const url = URL.createObjectURL(file);
+    const cleanName = file.name.replace(/\.[^.]+$/,'');
+    const key = `upload:${file.name}:${file.size}:${file.lastModified}`;
+    if (addPhotoEntry({ url, cleanName, key })) added++;
   });
+  if (!added) return;
   startBtn.style.display='block';
-  toast(`${imgs.length} photo${imgs.length>1?'s':''} loaded`);
+  toast(`${added} photo${added>1?'s':''} loaded`);
+}
+
+function getNameFromUrl(url) {
+  const pathname = new URL(url).pathname;
+  const fileName = decodeURIComponent(pathname.split('/').pop() || '');
+  return fileName.replace(/\.[^.]+$/, '');
+}
+
+function parseDirectoryListing(html, baseUrl) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  return [...doc.querySelectorAll('a[href]')]
+    .map(a => a.getAttribute('href') || '')
+    .filter(href => href && href !== '../' && !href.startsWith('?'))
+    .map(href => new URL(href, baseUrl).href)
+    .filter(url => IMG_EXT_RE.test(new URL(url).pathname));
+}
+
+function parseManifestJson(text, baseUrl) {
+  const payload = JSON.parse(text);
+  if (!payload || !Array.isArray(payload.files)) return [];
+  return payload.files
+    .filter(name => typeof name === 'string' && IMG_EXT_RE.test(name))
+    .map(name => new URL(name, baseUrl).href);
+}
+
+async function fetchAutoFolderPhotos() {
+  const res = await fetch(AUTO_PHOTO_DIR, { cache: 'no-store' });
+  if (!res.ok) throw new Error('photos dir fetch failed');
+  const text = await res.text();
+  const baseUrl = res.url || AUTO_PHOTO_DIR;
+  const contentType = (res.headers.get('content-type') || '').toLowerCase();
+  if (contentType.includes('application/json')) return parseManifestJson(text, baseUrl);
+  const trimmed = text.trim();
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    try { return parseManifestJson(trimmed, baseUrl); } catch {}
+  }
+  return parseDirectoryListing(text, baseUrl);
+}
+
+function refreshGalleryAfterAutoAdd(added) {
+  if (!added) return;
+  startBtn.style.display = 'block';
+  const started = welcomeEl.style.display === 'none';
+  if (!started) {
+    toast(`${added} new photo${added>1?'s':''} detected in photos/`);
+    return;
+  }
+  const activeYear = yearSel.value;
+  const activeTag = tagSel.value;
+  rebuildFilters();
+  yearSel.value = activeYear;
+  tagSel.value = activeTag;
+  applyFilter();
+  toast(`${added} new photo${added>1?'s':''} added from photos/`);
+}
+
+async function pollPhotosFolder(silent = true) {
+  try {
+    const urls = await fetchAutoFolderPhotos();
+    let added = 0;
+    urls.forEach(url => {
+      const cleanName = getNameFromUrl(url);
+      const key = `auto:${url}`;
+      if (addPhotoEntry({ url, cleanName, key })) added++;
+    });
+    if (added) refreshGalleryAfterAutoAdd(added);
+  } catch {
+    if (!silent && !autoPollNoticeShown) {
+      toast('Auto-scan unavailable. Use a local server and photos/ folder.');
+      autoPollNoticeShown = true;
+    }
+  }
+}
+
+function startAutoPoll() {
+  clearInterval(autoPollTimer);
+  pollPhotosFolder(false);
+  autoPollTimer = setInterval(() => pollPhotosFolder(true), AUTO_POLL_MS);
 }
 
 fileInput.addEventListener('change', e=>loadFiles(e.target.files));
@@ -475,6 +587,8 @@ startBtn.addEventListener('click', ()=>{
   document.getElementById('photo-count').textContent=`${filtered.length} photos`;
   rebuildFilters(); buildMosaic(); startAllFrames(); startPS();
 });
+
+startAutoPoll();
 
 document.addEventListener('keydown', e=>{
   if(e.key==='Escape'){closeTag();closeExport();}
