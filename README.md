@@ -28,10 +28,42 @@ USB:/
 7. The gallery now auto-scans `photos/` every ~10 seconds and adds new files automatically.
 8. Optional fallback: you can still click the drop zone to load files manually.
 
+### Quick launch scripts
+
+- macOS: double-click [run-gallery-mac.command](run-gallery-mac.command)
+- Windows: double-click [run-gallery-windows.bat](run-gallery-windows.bat)
+
+Both scripts:
+- start a local server in this project folder
+- open [gallery.html](gallery.html)
+- keep the server running until you close the terminal window or press `Ctrl+C`
+
 ### Auto-scan note (important)
 
 Automatic folder polling works when the gallery is opened through a local web server (for example `http://127.0.0.1:4173/gallery.html`).
 On strict `file:///` environments, some browsers block folder listing — manual file loading remains available.
+
+### Manifest fallback (recommended)
+
+If your server/browser does not expose a directory listing for `photos/`, create `photos/manifest.json`:
+
+```json
+{
+  "files": [
+    "IMG_2023_beach.jpg",
+    "Hanukkah_2022.jpg"
+  ]
+}
+```
+
+The gallery checks both `photos/` and `photos/manifest.json` during auto-scan.
+
+To rebuild the manifest after adding/removing files:
+
+1. Open the gallery via `http://...` (local server mode).
+2. Click **🗂 Refresh Manifest** in the control bar.
+3. A new `manifest.json` is downloaded.
+4. Replace `photos/manifest.json` with the downloaded file.
 
 ---
 
@@ -79,6 +111,8 @@ You can toggle it on/off from the bottom control bar badge (⬚ Pixel Shift: ON/
 | Shuffle           | 🔀 button                        |
 | Add photos        | ＋ Photos button                 |
 | Auto add from folder | Drop files into `photos/` (polled every ~10s) |
+| Manifest fallback | List filenames in `photos/manifest.json` |
+| Rebuild manifest  | 🗂 Refresh Manifest (downloads updated manifest) |
 | Filter by year    | Year dropdown                    |
 | Filter by theme   | Theme dropdown                   |
 | Tag current photo | Frame hover → “🏷️ edit tags”    |
@@ -95,5 +129,5 @@ Hover anywhere on screen to reveal the control bar.
 
 - If the font doesn't load (no internet on TV), the gallery still works fine — it falls back to a serif font.
 - If the browser blocks local file access, try a different browser app on the TV, or use a laptop connected to the TV via HDMI instead.
-- If auto-scan doesn't detect files on TV browser, use the manual file picker (this is a browser security limitation, not a gallery bug).
+- If auto-scan doesn't detect files on TV browser, use `photos/manifest.json` or the manual file picker.
 - For the best experience, put the TV browser in **fullscreen mode** (usually F11 or the TV remote's full-screen button).

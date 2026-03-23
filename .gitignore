@@ -1,2 +1,4 @@
 # files inside the photos folder
 photos/*
+!photos/.gitkeep
+!photos/manifest.json

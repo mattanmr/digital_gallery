@@ -220,6 +220,7 @@ select.c-sel { background:var(--ui-bg); color:var(--gold-lt); border:1px solid v
   <button class="c-btn" onclick="shuffleAll()">🔀 Shuffle</button>
   <button class="c-btn" onclick="document.getElementById('file-input-extra').click()">＋ Photos</button>
   <input type="file" id="file-input-extra" multiple accept="image/*">
+  <button class="c-btn" onclick="refreshManifestFromFolder()">🗂 Refresh Manifest</button>
   <button class="c-btn" onclick="openExport()">💾 Save Tags</button>
   <div class="c-spacer"></div>
   <label style="font-size:.72rem;color:var(--text-dim)">Speed</label>
@@ -266,8 +267,10 @@ const TILTS       = [-.7,.4,-1.1,.3,-.5,.9,-.3,.6];
 const DARK_MATS   = new Set([1,4,6]);
 const SPEED_JITTER = 0.45;
 const AUTO_PHOTO_DIR = 'photos/';
+const AUTO_MANIFEST = `${AUTO_PHOTO_DIR}manifest.json`;
 const AUTO_POLL_MS = 10000;
 const IMG_EXT_RE = /\.(jpg|jpeg|png|webp|gif|bmp|avif|heic|heif)$/i;
+const IS_FILE_PROTOCOL = location.protocol === 'file:';
 
 let allPhotos = [];
 let filtered  = [];
@@ -448,17 +451,45 @@ function parseManifestJson(text, baseUrl) {
 }
 
 async function fetchAutoFolderPhotos() {
-  const res = await fetch(AUTO_PHOTO_DIR, { cache: 'no-store' });
-  if (!res.ok) throw new Error('photos dir fetch failed');
-  const text = await res.text();
-  const baseUrl = res.url || AUTO_PHOTO_DIR;
-  const contentType = (res.headers.get('content-type') || '').toLowerCase();
-  if (contentType.includes('application/json')) return parseManifestJson(text, baseUrl);
-  const trimmed = text.trim();
-  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-    try { return parseManifestJson(trimmed, baseUrl); } catch {}
+  const urls = new Set();
+  let fetchedAnySource = false;
+
+  try {
+    const dirRes = await fetch(AUTO_PHOTO_DIR, { cache: 'no-store' });
+    if (dirRes.ok) {
+      const text = await dirRes.text();
+      const baseUrl = dirRes.url || AUTO_PHOTO_DIR;
+      const contentType = (dirRes.headers.get('content-type') || '').toLowerCase();
+      let dirUrls = [];
+      if (contentType.includes('application/json')) dirUrls = parseManifestJson(text, baseUrl);
+      else {
+        const trimmed = text.trim();
+        if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+          try { dirUrls = parseManifestJson(trimmed, baseUrl); } catch { dirUrls = parseDirectoryListing(text, baseUrl); }
+        } else {
+          dirUrls = parseDirectoryListing(text, baseUrl);
+        }
+      }
+      dirUrls.forEach(url => urls.add(url));
+      fetchedAnySource = true;
+    }
+  } catch {}
+
+  try {
+    const manifestRes = await fetch(AUTO_MANIFEST, { cache: 'no-store' });
+    if (manifestRes.ok) {
+      const text = await manifestRes.text();
+      const baseUrl = manifestRes.url || AUTO_PHOTO_DIR;
+      const manifestUrls = parseManifestJson(text, baseUrl);
+      manifestUrls.forEach(url => urls.add(url));
+      fetchedAnySource = true;
+    }
+  } catch {}
+
+  if (!fetchedAnySource) {
+    throw new Error('photos auto-scan fetch failed');
   }
-  return parseDirectoryListing(text, baseUrl);
+  return [...urls];
 }
 
 function refreshGalleryAfterAutoAdd(added) {
@@ -490,7 +521,7 @@ async function pollPhotosFolder(silent = true) {
     if (added) refreshGalleryAfterAutoAdd(added);
   } catch {
     if (!silent && !autoPollNoticeShown) {
-      toast('Auto-scan unavailable. Use a local server and photos/ folder.');
+      toast('Auto-scan unavailable. Use a local server (or photos/manifest.json).');
       autoPollNoticeShown = true;
     }
   }
@@ -498,6 +529,13 @@ async function pollPhotosFolder(silent = true) {
 
 function startAutoPoll() {
   clearInterval(autoPollTimer);
+  if (IS_FILE_PROTOCOL) {
+    if (!autoPollNoticeShown) {
+      toast('Auto-scan needs http:// (local server). file:/// mode blocks folder access.');
+      autoPollNoticeShown = true;
+    }
+    return;
+  }
   pollPhotosFolder(false);
   autoPollTimer = setInterval(() => pollPhotosFolder(true), AUTO_POLL_MS);
 }
@@ -530,6 +568,44 @@ function downloadTags() {
   const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(new Blob([JSON.stringify(out,null,2)],{type:'application/json'})),download:'tags.json'});
   a.click(); URL.revokeObjectURL(a.href);
   toast('tags.json downloaded');
+}
+
+function toManifestPath(url) {
+  try {
+    const full = new URL(url, location.href);
+    const base = new URL(AUTO_PHOTO_DIR, location.href);
+    const fullPath = decodeURIComponent(full.pathname);
+    const basePath = decodeURIComponent(base.pathname.endsWith('/') ? base.pathname : `${base.pathname}/`);
+    if (fullPath.startsWith(basePath)) return fullPath.slice(basePath.length);
+    return decodeURIComponent(fullPath.split('/').pop() || '');
+  } catch {
+    return decodeURIComponent(String(url).split('/').pop() || String(url));
+  }
+}
+
+function downloadManifest(files) {
+  const out = { files };
+  const a = Object.assign(document.createElement('a'), {
+    href: URL.createObjectURL(new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' })),
+    download: 'manifest.json'
+  });
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+async function refreshManifestFromFolder() {
+  if (IS_FILE_PROTOCOL) {
+    toast('Manifest refresh needs http:// (local server).');
+    return;
+  }
+  try {
+    const urls = await fetchAutoFolderPhotos();
+    const files = [...new Set(urls.map(toManifestPath).filter(name => IMG_EXT_RE.test(name)))].sort((a,b)=>a.localeCompare(b));
+    downloadManifest(files);
+    toast(`Scanned ${files.length} photo${files.length!==1?'s':''}. Downloaded manifest.json`);
+  } catch {
+    toast('Scan failed. Check photos/ access and try again.');
+  }
 }
 
 function openExport()  { document.getElementById('export-modal').classList.add('show'); }
