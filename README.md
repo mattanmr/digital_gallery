@@ -87,7 +87,3 @@ Hover anywhere on screen to reveal the top and bottom bars.
 - If the font doesn't load (no internet on TV), the gallery still works fine — it falls back to a serif font.
 - If the browser blocks local file access, try a different browser app on the TV, or use a laptop connected to the TV via HDMI instead.
 - For the best experience, put the TV browser in **fullscreen mode** (usually F11 or the TV remote's full-screen button).
-
----
-
-*Family Gallery v2 — built for Mattan's living room 🏡*
