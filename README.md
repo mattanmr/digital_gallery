@@ -32,10 +32,10 @@ USB:/
 ## How tags are saved between sessions
 
 Because the gallery is a local HTML file (not a website), it cannot save data
-automatically. Here's the simple 2-step workflow (works in **both** `gallery.html` and `photo-frame.html`):
+automatically. Here's the simple 2-step workflow for `gallery.html`:
 
 ### At the END of a session:
-- Click **💾 Save Tags** in the top bar
+- Click **💾 Save Tags** in the control bar
 - Click **⬇ Download tags.json**
 - Copy the downloaded `tags.json` to the USB stick (replace the old one)
 
@@ -60,7 +60,7 @@ automatically. Here's the simple 2-step workflow (works in **both** `gallery.htm
 
 The gallery automatically shifts the entire image by a few pixels every 30 seconds.
 This prevents screen burn-in on plasma and OLED TVs.
-You can toggle it on/off from the top bar badge (⬚ Pixel Shift: ON/OFF).
+You can toggle it on/off from the bottom control bar badge (⬚ Pixel Shift: ON/OFF).
 
 ---
 
@@ -68,17 +68,19 @@ You can toggle it on/off from the top bar badge (⬚ Pixel Shift: ON/OFF).
 
 | Action            | How                              |
 |-------------------|----------------------------------|
-| Next photo        | ▶ button or → key                |
-| Prev photo        | ◀ button or ← key                |
-| Play / Pause      | ⏸ button or Space bar            |
-| Speed             | Slider (3s – 60s per photo)      |
+| Cycle photos      | Automatic across all frames      |
+| Speed             | Slider (4s – 40s per cycle)      |
 | Shuffle           | 🔀 button                        |
+| Add photos        | ＋ Photos button                 |
 | Filter by year    | Year dropdown                    |
 | Filter by theme   | Theme dropdown                   |
-| Tag current photo | 🏷️ button                       |
+| Tag current photo | Frame hover → “🏷️ edit tags”    |
 | Save tags         | 💾 Save Tags → Download          |
+| Toggle pixel shift| ⬚ Pixel Shift ON/OFF             |
+| Shuffle shortcut  | S key                            |
+| Close modal       | Esc key                          |
 
-Hover anywhere on screen to reveal the top and bottom bars.
+Hover anywhere on screen to reveal the control bar.
 
 ---
 

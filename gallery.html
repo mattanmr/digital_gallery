@@ -157,7 +157,7 @@ body:hover #ctrlbar { opacity:1; pointer-events:all; }
 .c-btn.active { color:#a8d8a0; border-color:rgba(168,216,160,.4); background:rgba(168,216,160,.08); }
 select.c-sel { background:var(--ui-bg); color:var(--gold-lt); border:1px solid var(--tag-b); border-radius:2px; padding:5px 9px; font-family:'Cormorant Garamond',serif; font-size:.82rem; cursor:pointer; outline:none; }
 .c-spacer { flex:1; }
-#speed-sl { -webkit-appearance:none; width:75px; height:3px; background:var(--tag-b); outline:none; cursor:pointer; border-radius:2px; }
+#speed-sl { appearance:none; -webkit-appearance:none; width:75px; height:3px; background:var(--tag-b); outline:none; cursor:pointer; border-radius:2px; }
 #speed-sl::-webkit-slider-thumb { -webkit-appearance:none; width:13px; height:13px; border-radius:50%; background:var(--gold); cursor:pointer; }
 
 /* MODALS */
@@ -406,7 +406,7 @@ document.getElementById('tags-import-input').addEventListener('change', e=>{
       allPhotos.forEach(p=>{if(savedTags[p.name])Object.assign(p,savedTags[p.name]);});
       rebuildFilters(); applyFilter();
       toast(`Tags loaded for ${Object.keys(savedTags).length} photo(s)`);
-      startBtn.style.display='block';
+      startBtn.style.display = allPhotos.length ? 'block' : 'none';
     } catch { toast('Invalid tags.json'); }
   };
   r.readAsText(f);
